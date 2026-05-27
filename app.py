@@ -1071,24 +1071,24 @@ else:
         df_telem = pd.DataFrame(telem_rows)
         st.dataframe(df_telem, use_container_width=True, hide_index=True)
 
-        # --- Detalle microscopico por iteracion global seleccionada ---
+        # --- Detalle microscopico de las primeras 5 iteraciones globales ---
         st.markdown("#### DETALLE MICROSCOPICO DEL BACKTRACKING")
 
-        # Solo iteraciones globales con tracking (excluye k=0 que es estado inicial)
-        valid_k = [k_idx for k_idx in range(len(history['bt_tracking']))
-                   if len(history['bt_tracking'][k_idx]) > 0]
+        MAX_DETAIL_ITERATIONS = 5
+        n_total = len(history['bt_tracking'])
+        shown = 0
 
-        if len(valid_k) == 0:
-            st.info("No hay intentos de backtracking registrados (el algoritmo no realizo iteraciones).")
-        else:
-            k_selected = st.selectbox(
-                "Ver detalle de Backtracking para Iteracion Global:",
-                options=valid_k,
-                index=0,
-                format_func=lambda k: f"k = {k}",
-            )
+        # Bucle desde k=1 (k=0 es estado inicial sin backtracking)
+        for k_idx in range(1, n_total):
+            if shown >= MAX_DETAIL_ITERATIONS:
+                break
 
-            tracking_k = history['bt_tracking'][k_selected]
+            tracking_k = history['bt_tracking'][k_idx]
+            if len(tracking_k) == 0:
+                continue
+
+            st.markdown(f"**VER DETALLE DE BACKTRACKING PARA ITERACION GLOBAL: k = {k_idx}**")
+
             detail_rows = []
             for entry in tracking_k:
                 x_new_fmt = "[" + ", ".join(f"{v:.4f}" for v in entry['x_new']) + "]"
@@ -1103,6 +1103,10 @@ else:
                 })
             df_detail = pd.DataFrame(detail_rows)
             st.dataframe(df_detail, use_container_width=True, hide_index=True)
+            shown += 1
+
+        if shown == 0:
+            st.info("No hay intentos de backtracking registrados (el algoritmo no realizo iteraciones).")
 
         st.markdown("---")
 
