@@ -302,128 +302,150 @@ def make_numeric_evaluators(expr, variables, grad_expr, hess_expr):
 
 
 # =============================================================================
-# BUSQUEDA DE LINEA: CONDICIONES DE WOLFE (PRIMERA Y SEGUNDA)
+# BUSQUEDA DE LINEA: BACKTRACKING CON CONDICION DE ARMIJO
 # =============================================================================
 
-def wolfe_line_search(f, grad, x, d, c1=1e-4, c2=0.9, alpha_init=1.0,
-                      alpha_max=1e6, max_ls_iter=50):
+def backtracking_line_search(f, grad, x, d, c1=1e-4, c2=0.9, rho=0.5,
+                             alpha_init=1.0, max_backtrack=50):
     """
-    Busqueda de linea que satisface las condiciones de Wolfe fuertes.
-    - Primera condicion (Armijo): f(x + a*d) <= f(x) + c1*a*grad(x).T @ d
-    - Segunda condicion (Curvatura): |grad(x + a*d).T @ d| <= c2 * |grad(x).T @ d|
+    Busqueda de linea por backtracking con rastreo completo de cada intento.
 
-    Implementacion clasica zoom (Nocedal & Wright, Algorithm 3.5 y 3.6).
+    Detencion: cuando se cumple la Condicion de Armijo (LHS <= RHS).
+    Adicionalmente, en cada intento se evalua (sin influir en la detencion)
+    la Condicion 2 fuerte de Wolfe (curvatura).
+
+        Armijo (C1):       f(x + alpha*d) <= f(x) + c1 * alpha * grad(x).T @ d
+        Wolfe 2 (C2):      |grad(x + alpha*d).T @ d| <= c2 * |grad(x).T @ d|
+
+    Si Armijo no se cumple, se reduce el paso: alpha = rho * alpha.
+
+    Retorna (alpha_final, tracking_list) donde tracking_list es una lista de
+    diccionarios, uno por intento, con todas las metricas pedidas para auditoria.
     """
-    phi_0 = f(x)
+    phi_0 = float(f(x))
     grad_0 = grad(x)
     dphi_0 = float(np.dot(grad_0, d))
+    abs_dphi_0 = abs(dphi_0)
 
-    # Si la direccion no es de descenso, devolvemos algo conservador
+    tracking = []
+
+    # Si d no es direccion de descenso, registramos un intento unico y salimos
     if dphi_0 >= 0:
-        return min(alpha_init, 1.0)
+        alpha_safe = float(min(alpha_init, 1.0))
+        x_new = x + alpha_safe * d
+        lhs = float(f(x_new))
+        rhs = phi_0 + c1 * alpha_safe * dphi_0
+        grad_new = grad(x_new)
+        dphi_new = float(np.dot(grad_new, d))
+        tracking.append({
+            'iter_bt': 1,
+            'alpha': alpha_safe,
+            'x_new': np.asarray(x_new, dtype=float).copy(),
+            'lhs_armijo': lhs,
+            'rhs_armijo': rhs,
+            'cumple_armijo': lhs <= rhs,
+            'cumple_wolfe2': abs(dphi_new) <= c2 * abs_dphi_0,
+        })
+        return alpha_safe, tracking
 
-    alpha_prev = 0.0
-    phi_prev = phi_0
-    alpha = alpha_init
+    alpha = float(alpha_init)
 
-    def phi(a):
-        return f(x + a * d)
+    for i in range(1, max_backtrack + 1):
+        x_new = x + alpha * d
+        lhs = float(f(x_new))
+        rhs = phi_0 + c1 * alpha * dphi_0
+        cumple_armijo = lhs <= rhs
 
-    def dphi(a):
-        return float(np.dot(grad(x + a * d), d))
+        # Wolfe 2 (curvatura fuerte): solo informativo, no detiene el bucle
+        grad_new = grad(x_new)
+        dphi_new = float(np.dot(grad_new, d))
+        cumple_wolfe2 = abs(dphi_new) <= c2 * abs_dphi_0
 
-    for i in range(1, max_ls_iter + 1):
-        phi_alpha = phi(alpha)
+        tracking.append({
+            'iter_bt': i,
+            'alpha': alpha,
+            'x_new': np.asarray(x_new, dtype=float).copy(),
+            'lhs_armijo': lhs,
+            'rhs_armijo': rhs,
+            'cumple_armijo': bool(cumple_armijo),
+            'cumple_wolfe2': bool(cumple_wolfe2),
+        })
 
-        # Verificacion primera condicion (Armijo)
-        if (phi_alpha > phi_0 + c1 * alpha * dphi_0) or (i > 1 and phi_alpha >= phi_prev):
-            return _zoom(phi, dphi, alpha_prev, alpha, phi_0, dphi_0, c1, c2, max_ls_iter)
+        # Detencion: Armijo cumplido
+        if cumple_armijo:
+            return alpha, tracking
 
-        dphi_alpha = dphi(alpha)
+        # Reduccion del paso
+        alpha = rho * alpha
 
-        # Verificacion segunda condicion (curvatura fuerte)
-        if abs(dphi_alpha) <= -c2 * dphi_0:
-            return alpha
-
-        if dphi_alpha >= 0:
-            return _zoom(phi, dphi, alpha, alpha_prev, phi_0, dphi_0, c1, c2, max_ls_iter)
-
-        alpha_prev = alpha
-        phi_prev = phi_alpha
-        alpha = min(2.0 * alpha, alpha_max)
-
-    return alpha
-
-
-def _zoom(phi, dphi, alpha_lo, alpha_hi, phi_0, dphi_0, c1, c2, max_iter=50):
-    """Fase de zoom del algoritmo de Wolfe."""
-    for _ in range(max_iter):
-        # Interpolacion por biseccion (robusto)
-        alpha_j = 0.5 * (alpha_lo + alpha_hi)
-        phi_j = phi(alpha_j)
-        phi_lo = phi(alpha_lo)
-
-        if (phi_j > phi_0 + c1 * alpha_j * dphi_0) or (phi_j >= phi_lo):
-            alpha_hi = alpha_j
-        else:
-            dphi_j = dphi(alpha_j)
-            if abs(dphi_j) <= -c2 * dphi_0:
-                return alpha_j
-            if dphi_j * (alpha_hi - alpha_lo) >= 0:
-                alpha_hi = alpha_lo
-            alpha_lo = alpha_j
-
-        if abs(alpha_hi - alpha_lo) < 1e-12:
-            return alpha_j
-
-    return 0.5 * (alpha_lo + alpha_hi)
+    # Se agotaron los intentos sin cumplir Armijo: devolver el ultimo alpha
+    return alpha, tracking
 
 
 # =============================================================================
 # ALGORITMOS DE OPTIMIZACION
 # =============================================================================
 
-def gradient_descent(f, grad, x0, max_iter, tol, c1, c2):
-    """Metodo del gradiente con paso por Wolfe."""
+def _init_history(x0, f_val, g_norm):
+    """
+    Estructura uniforme de telemetria. El indice k corresponde a la iteracion
+    global: k=0 es el punto inicial (sin paso aun, alpha=NaN, sin tracking).
+    """
+    return {
+        'x': [np.array(x0, dtype=float).copy()],
+        'f': [float(f_val)],
+        'grad_norm': [float(g_norm)],
+        'alpha': [float('nan')],
+        'n_backtrack': [-1],
+        'bt_tracking': [[]],  # lista de intentos de backtracking por iter global
+    }
+
+
+def gradient_descent(f, grad, x0, max_iter, tol, c1, c2, rho):
+    """Metodo del descenso por gradiente con backtracking Armijo."""
     x = np.array(x0, dtype=float).flatten()
-    history = {'x': [x.copy()], 'f': [f(x)], 'grad_norm': []}
+    g = grad(x)
+    g_norm = float(np.linalg.norm(g))
+    history = _init_history(x, f(x), g_norm)
     stop_reason = "Iteraciones agotadas"
 
     for k in range(max_iter):
-        g = grad(x)
-        g_norm = float(np.linalg.norm(g))
-        history['grad_norm'].append(g_norm)
-
         if g_norm < tol:
             stop_reason = f"Convergencia alcanzada (||grad|| < {tol})"
             break
 
-        d = -g  # direccion de descenso
-        alpha = wolfe_line_search(f, grad, x, d, c1=c1, c2=c2)
+        d = -g
+        alpha, tracking = backtracking_line_search(f, grad, x, d, c1=c1, c2=c2, rho=rho)
         x = x + alpha * d
+        g = grad(x)
+        g_norm = float(np.linalg.norm(g))
+
         history['x'].append(x.copy())
-        history['f'].append(f(x))
+        history['f'].append(float(f(x)))
+        history['grad_norm'].append(g_norm)
+        history['alpha'].append(float(alpha))
+        history['n_backtrack'].append(int(len(tracking)))
+        history['bt_tracking'].append(tracking)
 
     return x, history, stop_reason
 
 
-def conjugate_gradient(f, grad, x0, max_iter, tol, c1, c2):
-    """Metodo del gradiente conjugado no lineal (Polak-Ribiere) con Wolfe."""
+def conjugate_gradient(f, grad, x0, max_iter, tol, c1, c2, rho):
+    """Gradiente conjugado no lineal (Polak-Ribiere+) con backtracking Armijo."""
     x = np.array(x0, dtype=float).flatten()
     n = len(x)
     g = grad(x)
+    g_norm = float(np.linalg.norm(g))
     d = -g.copy()
-    history = {'x': [x.copy()], 'f': [f(x)], 'grad_norm': [float(np.linalg.norm(g))]}
+    history = _init_history(x, f(x), g_norm)
     stop_reason = "Iteraciones agotadas"
 
     for k in range(max_iter):
-        g_norm = float(np.linalg.norm(g))
-
         if g_norm < tol:
             stop_reason = f"Convergencia alcanzada (||grad|| < {tol})"
             break
 
-        alpha = wolfe_line_search(f, grad, x, d, c1=c1, c2=c2)
+        alpha, tracking = backtracking_line_search(f, grad, x, d, c1=c1, c2=c2, rho=rho)
         x_new = x + alpha * d
         g_new = grad(x_new)
 
@@ -433,42 +455,44 @@ def conjugate_gradient(f, grad, x0, max_iter, tol, c1, c2):
             beta = 0.0
         else:
             beta = float(np.dot(g_new, g_new - g)) / denom
-            beta = max(beta, 0.0)  # variante PR+
+            beta = max(beta, 0.0)
 
         d = -g_new + beta * d
 
-        # Reinicio si la nueva direccion no es de descenso
+        # Reinicio si la nueva direccion no es de descenso o periodicamente
         if float(np.dot(g_new, d)) >= 0 or (k + 1) % n == 0:
             d = -g_new
 
         x = x_new
         g = g_new
+        g_norm = float(np.linalg.norm(g))
 
         history['x'].append(x.copy())
-        history['f'].append(f(x))
-        history['grad_norm'].append(float(np.linalg.norm(g)))
+        history['f'].append(float(f(x)))
+        history['grad_norm'].append(g_norm)
+        history['alpha'].append(float(alpha))
+        history['n_backtrack'].append(int(len(tracking)))
+        history['bt_tracking'].append(tracking)
 
     return x, history, stop_reason
 
 
-def newton_method(f, grad, hess, x0, max_iter, tol, c1, c2):
-    """Metodo de Newton con paso por Wolfe."""
+def newton_method(f, grad, hess, x0, max_iter, tol, c1, c2, rho):
+    """Metodo de Newton con backtracking Armijo."""
     x = np.array(x0, dtype=float).flatten()
-    history = {'x': [x.copy()], 'f': [f(x)], 'grad_norm': []}
+    g = grad(x)
+    g_norm = float(np.linalg.norm(g))
+    history = _init_history(x, f(x), g_norm)
     stop_reason = "Iteraciones agotadas"
 
     for k in range(max_iter):
-        g = grad(x)
-        g_norm = float(np.linalg.norm(g))
-        history['grad_norm'].append(g_norm)
-
         if g_norm < tol:
             stop_reason = f"Convergencia alcanzada (||grad|| < {tol})"
             break
 
         H = hess(x)
 
-        # Caso 1D: H es escalar (1x1)
+        # Caso 1D: Hessiana es 1x1
         if H.shape == (1, 1):
             h_val = float(H[0, 0])
             if abs(h_val) < 1e-14:
@@ -477,7 +501,6 @@ def newton_method(f, grad, hess, x0, max_iter, tol, c1, c2):
                 )
             d = -g / h_val
         else:
-            # Resolucion del sistema H d = -g
             try:
                 d = np.linalg.solve(H, -g)
             except np.linalg.LinAlgError as e:
@@ -485,14 +508,21 @@ def newton_method(f, grad, hess, x0, max_iter, tol, c1, c2):
                     f"Hessiana singular en iteracion {k}: {e}"
                 )
 
-        # Si d no es direccion de descenso (Hessiana no definida positiva), caer a -g
+        # Fallback a -g si no es direccion de descenso
         if float(np.dot(g, d)) >= 0:
             d = -g
 
-        alpha = wolfe_line_search(f, grad, x, d, c1=c1, c2=c2)
+        alpha, tracking = backtracking_line_search(f, grad, x, d, c1=c1, c2=c2, rho=rho)
         x = x + alpha * d
+        g = grad(x)
+        g_norm = float(np.linalg.norm(g))
+
         history['x'].append(x.copy())
-        history['f'].append(f(x))
+        history['f'].append(float(f(x)))
+        history['grad_norm'].append(g_norm)
+        history['alpha'].append(float(alpha))
+        history['n_backtrack'].append(int(len(tracking)))
+        history['bt_tracking'].append(tracking)
 
     return x, history, stop_reason
 
@@ -502,26 +532,54 @@ def newton_method(f, grad, hess, x0, max_iter, tol, c1, c2):
 # =============================================================================
 
 def plot_convergence(history):
-    """Grafico de error vs iteraciones."""
-    grad_norms = history['grad_norm']
+    """Grafico de norma del gradiente vs iteraciones."""
+    grad_norms = history.get('grad_norm', [])
     if len(grad_norms) == 0:
         return None
 
+    # Limpieza: convertir a array, descartar NaN/Inf que dañarian la escala log
+    arr = np.array(grad_norms, dtype=float)
+    finite_mask = np.isfinite(arr)
+    if not np.any(finite_mask):
+        return None
+
+    iter_idx = np.arange(len(arr))[finite_mask]
+    y_vals = arr[finite_mask]
+
+    # Decidir escala: si todos los valores son positivos y abarcan al menos 1
+    # orden de magnitud, usamos log; de lo contrario lineal para evitar la
+    # apariencia de "linea plana constante".
+    positive_mask = y_vals > 0
+    use_log = False
+    if np.any(positive_mask):
+        pos_vals = y_vals[positive_mask]
+        if pos_vals.min() > 0 and (pos_vals.max() / pos_vals.min()) > 10.0:
+            use_log = True
+
+    # Sustituimos ceros exactos por un piso minimo razonable para que la escala
+    # log no los excluya silenciosamente
+    if use_log:
+        floor = max(np.finfo(float).eps, pos_vals.min() * 1e-3)
+        y_plot = np.where(y_vals > 0, y_vals, floor)
+    else:
+        y_plot = y_vals
+
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=list(range(len(grad_norms))),
-        y=grad_norms,
+        x=iter_idx,
+        y=y_plot,
         mode='lines+markers',
         name='||grad f(x_k)||',
         line=dict(color='#b22222', width=2),
         marker=dict(color='#ff4444', size=6),
+        hovertemplate='Iter k=%{x}<br>||grad||=%{y:.6e}<extra></extra>',
     ))
     fig.update_layout(
         template='plotly_dark',
         title='CURVA DE CONVERGENCIA',
         xaxis_title='Iteracion k',
-        yaxis_title='Norma del gradiente',
-        yaxis_type='log',
+        yaxis_title='Norma del gradiente' + (' (escala log)' if use_log else ''),
+        yaxis_type='log' if use_log else 'linear',
         paper_bgcolor='#000000',
         plot_bgcolor='#0a0a0a',
         font=dict(family='Courier New', color='#cccccc'),
@@ -728,7 +786,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown("### CRITERIOS DE CONVERGENCIA Y BUSQUEDA DE LINEA")
-row3_col1, row3_col2, row3_col3, row3_col4 = st.columns(4)
+row3_col1, row3_col2, row3_col3, row3_col4, row3_col5 = st.columns(5)
 with row3_col1:
     max_iter = st.number_input(
         "Maximo de iteraciones",
@@ -746,12 +804,17 @@ with row3_col3:
     )
 with row3_col4:
     c2 = st.number_input(
-        "c2 (curvatura)",
+        "c2 (Curvatura)",
         min_value=0.1, max_value=0.999, value=0.9, step=0.05
+    )
+with row3_col5:
+    rho = st.number_input(
+        "Factor de reduccion (rho)",
+        min_value=0.1, max_value=0.9, value=0.5, step=0.05
     )
 
 if c1 >= c2:
-    st.warning("Se requiere c1 < c2 para la validez de las condiciones de Wolfe.")
+    st.warning("Se recomienda c1 < c2 para coherencia teorica de las condiciones de Wolfe.")
 
 st.markdown("---")
 
@@ -792,26 +855,22 @@ else:
                 f"El punto inicial tiene {len(x0)} componentes pero se requieren {len(variables)}."
             )
 
-        # Validacion c1 < c2
-        if c1 >= c2:
-            raise ValueError("Se requiere c1 < c2 para las condiciones de Wolfe.")
-
         # Ejecucion del algoritmo
         with st.spinner(f"Ejecutando {method}..."):
             if method == "Gradiente":
                 x_star, history, stop_reason = gradient_descent(
                     f_callable, grad_callable, x0, int(max_iter), float(tol),
-                    float(c1), float(c2)
+                    float(c1), float(c2), float(rho)
                 )
             elif method == "Gradiente Conjugado":
                 x_star, history, stop_reason = conjugate_gradient(
                     f_callable, grad_callable, x0, int(max_iter), float(tol),
-                    float(c1), float(c2)
+                    float(c1), float(c2), float(rho)
                 )
             else:  # Newton
                 x_star, history, stop_reason = newton_method(
                     f_callable, grad_callable, hess_callable, x0,
-                    int(max_iter), float(tol), float(c1), float(c2)
+                    int(max_iter), float(tol), float(c1), float(c2), float(rho)
                 )
 
         f_star = f_callable(x_star)
@@ -854,6 +913,64 @@ else:
             st.metric("Norma final ||grad||", f"{final_grad_norm:.2f}")
 
         st.info(f"Criterio de parada: {stop_reason}")
+
+        st.markdown("---")
+
+        # --- Telemetria del backtracking ---
+        st.markdown("### REGISTRO DE TELEMETRIA (BACKTRACKING)")
+
+        import pandas as pd  # import local: evita cargas innecesarias
+
+        # Resumen por iteracion global
+        telem_rows = []
+        for k_idx in range(len(history['x'])):
+            xk = history['x'][k_idx]
+            xk_fmt = "[" + ", ".join(f"{v:.4f}" for v in xk) + "]"
+            alpha_k = history['alpha'][k_idx]
+            nb_k = history['n_backtrack'][k_idx]
+            telem_rows.append({
+                'Iteracion (k)': k_idx,
+                'x_k': xk_fmt,
+                'f(x_k)': f"{history['f'][k_idx]:.4f}",
+                '||grad||': f"{history['grad_norm'][k_idx]:.4f}",
+                'Alpha': "---" if (isinstance(alpha_k, float) and np.isnan(alpha_k)) else f"{alpha_k:.4f}",
+                'Iter. Backtracking': "---" if nb_k < 0 else int(nb_k),
+            })
+        df_telem = pd.DataFrame(telem_rows)
+        st.dataframe(df_telem, use_container_width=True, hide_index=True)
+
+        # --- Detalle microscopico por iteracion global seleccionada ---
+        st.markdown("#### DETALLE MICROSCOPICO DEL BACKTRACKING")
+
+        # Solo iteraciones globales con tracking (excluye k=0 que es estado inicial)
+        valid_k = [k_idx for k_idx in range(len(history['bt_tracking']))
+                   if len(history['bt_tracking'][k_idx]) > 0]
+
+        if len(valid_k) == 0:
+            st.info("No hay intentos de backtracking registrados (el algoritmo no realizo iteraciones).")
+        else:
+            k_selected = st.selectbox(
+                "Ver detalle de Backtracking para Iteracion Global:",
+                options=valid_k,
+                index=0,
+                format_func=lambda k: f"k = {k}",
+            )
+
+            tracking_k = history['bt_tracking'][k_selected]
+            detail_rows = []
+            for entry in tracking_k:
+                x_new_fmt = "[" + ", ".join(f"{v:.4f}" for v in entry['x_new']) + "]"
+                detail_rows.append({
+                    'Iteracion BT': entry['iter_bt'],
+                    'Alpha': f"{entry['alpha']:.4f}",
+                    'x = x_k + alpha * d': x_new_fmt,
+                    'LHS: f(x)': f"{entry['lhs_armijo']:.4f}",
+                    'RHS Armijo': f"{entry['rhs_armijo']:.4f}",
+                    'LHS <= RHS': "Si" if entry['cumple_armijo'] else "No",
+                    '¿Cumple Wolfe 2?': "Si" if entry['cumple_wolfe2'] else "No",
+                })
+            df_detail = pd.DataFrame(detail_rows)
+            st.dataframe(df_detail, use_container_width=True, hide_index=True)
 
         st.markdown("---")
 
