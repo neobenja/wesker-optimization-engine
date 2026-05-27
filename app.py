@@ -9,6 +9,9 @@ import sympy as sp
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+import time
+import base64
+import struct
 
 
 # =============================================================================
@@ -20,6 +23,111 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+# =============================================================================
+# GENERADOR DE ALARMA DE CONTENCION (WAV sintetico, sin dependencias externas)
+# =============================================================================
+
+def _generate_alarm_wav_base64():
+    """
+    Genera una alarma corta tipo sirena nuclear: tres pulsos de onda cuadrada
+    a 880 Hz separados por silencios. WAV 8-bit mono, embebido en base64.
+    Se genera una unica vez al cargar el modulo.
+    """
+    sample_rate = 8000  # Hz
+    pulse_dur = 0.18    # segundos por pulso
+    gap_dur = 0.08      # segundos de silencio entre pulsos
+    n_pulses = 3
+    freq = 880.0        # Hz
+
+    n_pulse_samples = int(sample_rate * pulse_dur)
+    n_gap_samples = int(sample_rate * gap_dur)
+    samples = []
+
+    for _ in range(n_pulses):
+        # Onda cuadrada de amplitud moderada (no satura los oidos)
+        for i in range(n_pulse_samples):
+            phase = (i * freq / sample_rate) % 1.0
+            samples.append(220 if phase < 0.5 else 36)
+        # Silencio (128 = punto medio en 8-bit unsigned)
+        for _ in range(n_gap_samples):
+            samples.append(128)
+
+    n_samples = len(samples)
+    data_bytes = bytes(samples)
+
+    # Cabecera WAV PCM 8-bit mono
+    byte_rate = sample_rate * 1 * 1  # sample_rate * channels * bytes_per_sample
+    block_align = 1
+    bits_per_sample = 8
+    data_size = n_samples
+    fmt_chunk = struct.pack(
+        '<4sIHHIIHH',
+        b'fmt ', 16, 1, 1, sample_rate, byte_rate, block_align, bits_per_sample
+    )
+    data_chunk = struct.pack('<4sI', b'data', data_size) + data_bytes
+    riff_size = 4 + len(fmt_chunk) + len(data_chunk)
+    wav_bytes = struct.pack('<4sI4s', b'RIFF', riff_size, b'WAVE') + fmt_chunk + data_chunk
+
+    return base64.b64encode(wav_bytes).decode('ascii')
+
+
+ALARM_WAV_B64 = _generate_alarm_wav_base64()
+
+
+def _play_containment_alarm():
+    """
+    Reproduce la alarma de contencion autoplay. Inyecta un <audio> oculto con
+    el WAV embebido en base64 (no depende de URLs externas).
+    """
+    st.markdown(
+        f"""
+        <audio autoplay style="display:none;">
+            <source src="data:audio/wav;base64,{ALARM_WAV_B64}" type="audio/wav">
+        </audio>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =============================================================================
+# PROTOCOLO DE ARRANQUE REINA ROJA (one-time execution)
+# =============================================================================
+
+if 'red_queen_initialized' not in st.session_state:
+    boot_placeholder = st.empty()
+    boot_messages = [
+        "&gt; ESTABLECIENDO CONEXION CON MAINFRAME RACCOON CITY...",
+        "&gt; ESCANEANDO BIOMETRIA...",
+        "&gt; AUTORIZACION NIVEL 6 CONFIRMADA.",
+        "&gt; INICIALIZANDO MOTOR DE OPTIMIZACION WESKER...",
+    ]
+    accumulated = []
+    for msg in boot_messages:
+        accumulated.append(msg)
+        boot_placeholder.markdown(
+            f"""
+            <div style="
+                background-color: #000000;
+                color: #b22222;
+                font-family: 'Courier New', monospace;
+                font-size: 1.05rem;
+                padding: 40px 30px;
+                min-height: 60vh;
+                letter-spacing: 1px;
+                border: 1px solid #2a0000;
+                line-height: 2.2;
+            ">
+                {'<br>'.join(accumulated)}<span style="color: #ff0000;">_</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        time.sleep(0.8)
+    boot_placeholder.empty()
+    st.session_state['red_queen_initialized'] = True
+
 
 st.markdown("""
 <style>
@@ -225,8 +333,32 @@ hr {
 /* Ocultar el menu hamburguesa para look mas limpio */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
+
+/* Marca de agua Umbrella Corporation - octagono rotatorio esquina inferior derecha */
+@keyframes umbrella-rotate {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+.umbrella-watermark {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 110px;
+    height: 110px;
+    background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KPGRlZnM+Cjxwb2x5Z29uIGlkPSJvY3QiIHBvaW50cz0iMTAwLDEwIDE2NCwzNiAxOTAsMTAwIDE2NCwxNjQgMTAwLDE5MCAzNiwxNjQgMTAsMTAwIDM2LDM2IgogICAgICAgICBmaWxsPSIjMGEwYTBhIiBzdHJva2U9IiM0YTAwMDAiIHN0cm9rZS13aWR0aD0iMyIvPgo8L2RlZnM+Cjx1c2UgaHJlZj0iI29jdCIvPgo8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxMDAsMTAwKSI+CjxwYXRoIGQ9Ik0gMCwtNzUgTCA1MywtNTMgTCAwLDAgWiIgZmlsbD0iIzhiMDAwMCIvPgo8cGF0aCBkPSJNIDUzLC01MyBMIDc1LDAgTCAwLDAgWiIgZmlsbD0iIzJhMmEyYSIvPgo8cGF0aCBkPSJNIDc1LDAgTCA1Myw1MyBMIDAsMCBaIiBmaWxsPSIjOGIwMDAwIi8+CjxwYXRoIGQ9Ik0gNTMsNTMgTCAwLDc1IEwgMCwwIFoiIGZpbGw9IiMyYTJhMmEiLz4KPHBhdGggZD0iTSAwLDc1IEwgLTUzLDUzIEwgMCwwIFoiIGZpbGw9IiM4YjAwMDAiLz4KPHBhdGggZD0iTSAtNTMsNTMgTCAtNzUsMCBMIDAsMCBaIiBmaWxsPSIjMmEyYTJhIi8+CjxwYXRoIGQ9Ik0gLTc1LDAgTCAtNTMsLTUzIEwgMCwwIFoiIGZpbGw9IiM4YjAwMDAiLz4KPHBhdGggZD0iTSAtNTMsLTUzIEwgMCwtNzUgTCAwLDAgWiIgZmlsbD0iIzJhMmEyYSIvPgo8Y2lyY2xlIHI9IjE0IiBmaWxsPSIjMWEwMDAwIiBzdHJva2U9IiM2YjAwMDAiIHN0cm9rZS13aWR0aD0iMiIvPgo8L2c+Cjwvc3ZnPg==");
+    background-size: contain;
+    background-repeat: no-repeat;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 9999;
+    animation: umbrella-rotate 24s linear infinite;
+    filter: drop-shadow(0 0 6px #4a0000);
+}
 </style>
 """, unsafe_allow_html=True)
+
+# Marca de agua Umbrella Corporation (octagono rotatorio fijo en esquina inferior derecha)
+st.markdown('<div class="umbrella-watermark"></div>', unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -1048,6 +1180,7 @@ else:
             f"reformular la funcion, usar otro punto inicial, o aplicar el "
             f"metodo del Gradiente o Gradiente Conjugado."
         )
+        _play_containment_alarm()
     except ZeroDivisionError as e:
         st.error(
             "ALERTA DE SEGURIDAD - UMBRELLA CORP: SISTEMA COMPROMETIDO. "
@@ -1062,6 +1195,7 @@ else:
             f"contiene un denominador que se anula en la trayectoria del "
             f"algoritmo."
         )
+        _play_containment_alarm()
     except (OverflowError, FloatingPointError) as e:
         st.error(
             "ALERTA DE SEGURIDAD - UMBRELLA CORP: SISTEMA COMPROMETIDO. "
@@ -1078,6 +1212,7 @@ else:
             f"Verifique que la funcion tenga al menos un minimo local en la "
             f"vecindad del punto inicial."
         )
+        _play_containment_alarm()
     except ValueError as e:
         st.error(f"ERROR DE VALIDACION: {e}")
     except Exception as e:
@@ -1090,6 +1225,7 @@ else:
             "contencion activado."
         )
         st.error(f"Diagnostico tecnico: {type(e).__name__}: {e}")
+        _play_containment_alarm()
 
 
 # --- Footer ---
