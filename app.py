@@ -354,6 +354,14 @@ footer {visibility: hidden;}
     animation: umbrella-rotate 24s linear infinite;
     filter: drop-shadow(0 0 6px #4a0000);
 }
+
+/* --- PROTOCOLO DE MIRA TACTICA WESKER --- */
+html, body, [data-testid="stAppViewContainer"], .stApp {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23ff0000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>') 12 12, crosshair !important;
+}
+button, a, input, select, [data-testid="stSelectbox"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23ff0000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="2"></circle></svg>') 12 12, pointer !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
