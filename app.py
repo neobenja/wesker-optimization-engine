@@ -146,30 +146,34 @@ st.markdown("""
 /* Tipografia tecnica y opresiva */
 h1, h2, h3, h4, h5, h6 {
     font-family: 'Courier New', 'Consolas', monospace !important;
-    color: #d4d4d4 !important;
+    color: #FF0000 !important;
     letter-spacing: 2px;
     text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(255,0,0,0.9);
 }
 
 h1 {
-    color: #f0f0f0 !important;
-    border-bottom: 2px solid #4a0000;
+    color: #FF0000 !important;
+    border-bottom: 2px solid #FF0000;
     padding-bottom: 12px;
     font-weight: bold;
-    text-shadow: 0px 0px 4px rgba(139, 0, 0, 0.4);
+    text-shadow: 0 0 8px rgba(255,0,0,0.9);
+    box-shadow: 0 4px 8px -4px rgba(255,0,0,0.7);
 }
 
 h3 {
-    color: #8b0000 !important;
-    border-left: 3px solid #4a0000;
+    color: #FF0000 !important;
+    border-left: 3px solid #FF0000;
     padding-left: 10px;
     font-size: 1.1rem;
+    text-shadow: 0 0 8px rgba(255,0,0,0.9);
+    box-shadow: -4px 0 8px -4px rgba(255,0,0,0.7);
 }
 
 /* Texto general en gris apagado */
 p, span, label, div {
     font-family: 'Courier New', 'Consolas', monospace;
-    color: #a0a0a0;
+    color: #FFFFFF !important;
 }
 
 /* Inputs con fondo casi negro */
@@ -178,7 +182,7 @@ p, span, label, div {
 .stTextArea textarea,
 .stSelectbox > div > div {
     background-color: #0a0a0a !important;
-    color: #d4d4d4 !important;
+    color: #FFFFFF !important;
     border: 1px solid #2a0000 !important;
     border-radius: 0px !important;
     font-family: 'Courier New', monospace !important;
@@ -196,7 +200,7 @@ p, span, label, div {
 .stNumberInput label,
 .stTextArea label,
 .stSelectbox label {
-    color: #8b0000 !important;
+    color: #FFFFFF !important;
     font-family: 'Courier New', monospace !important;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -229,15 +233,15 @@ p, span, label, div {
 /* Tarjetas de metricas - estilo terminal clasificada */
 [data-testid="stMetric"] {
     background-color: #080808;
-    border: 1px solid #2a0000;
-    border-left: 4px solid #6b0000;
+    border: 1px solid #FF0000;
+    border-left: 4px solid #FF0000;
     padding: 18px;
     border-radius: 0px;
-    box-shadow: inset 0px 0px 20px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 0 12px rgba(255,0,0,0.7), inset 0px 0px 20px rgba(0, 0, 0, 0.8);
 }
 
 [data-testid="stMetricLabel"] {
-    color: #8b0000 !important;
+    color: #FFFFFF !important;
     font-family: 'Courier New', monospace !important;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -245,8 +249,14 @@ p, span, label, div {
 }
 
 [data-testid="stMetricValue"] {
-    color: #e0e0e0 !important;
+    color: #FFFFFF !important;
     font-family: 'Courier New', monospace !important;
+}
+
+/* Contenido de las tablas st.dataframe - blanco hielo */
+[data-testid="stDataFrame"],
+[data-testid="stDataFrame"] * {
+    color: #FFFFFF !important;
 }
 
 /* Alertas en rojo sangre oscuro */
@@ -268,8 +278,9 @@ div[data-baseweb="notification"] {
 
 /* Divisores - linea de rojo sangre */
 hr {
-    border-color: #2a0000 !important;
-    background-color: #2a0000 !important;
+    border-color: #FF0000 !important;
+    background-color: #FF0000 !important;
+    box-shadow: 0 0 8px rgba(255,0,0,0.9) !important;
     margin: 25px 0px;
 }
 
@@ -281,7 +292,7 @@ hr {
 /* Footer */
 .wesker-footer {
     text-align: center;
-    color: #4a4a4a;
+    color: #4a4a4a !important;
     font-family: 'Courier New', monospace;
     font-size: 0.75rem;
     letter-spacing: 2px;
@@ -293,7 +304,7 @@ hr {
 
 /* Lore visible - logs de terminal clasificada, estilo monitor antiguo */
 .wesker-lore {
-    color: #5a1a1a;
+    color: #5a1a1a !important;
     font-family: 'Courier New', monospace;
     font-size: 0.72rem;
     letter-spacing: 1px;
@@ -307,7 +318,7 @@ hr {
 }
 
 .wesker-lore-centered {
-    color: #5a1a1a;
+    color: #5a1a1a !important;
     font-family: 'Courier New', monospace;
     font-size: 0.7rem;
     letter-spacing: 2px;
