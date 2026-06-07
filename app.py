@@ -176,23 +176,42 @@ p, span, label, div {
     color: #FFFFFF !important;
 }
 
-/* Inputs con fondo casi negro */
+/* --- PROTOCOLO DE INTERFAZ TACTICA CORREGIDO --- */
+/* Cajas de texto en gris asfalto elegante, letra blanca y cursor rojo */
 .stTextInput input,
 .stNumberInput input,
 .stTextArea textarea,
-.stSelectbox > div > div {
-    background-color: #0a0a0a !important;
-    color: #FFFFFF !important;
-    border: 1px solid #2a0000 !important;
-    border-radius: 0px !important;
-    font-family: 'Courier New', monospace !important;
+div[data-baseweb="select"] > div {
+    background-color: #1E1E24 !important; /* Gris asfalto, destaca sin cegar */
+    color: #FFFFFF !important; /* Letra blanca perfecta */
+    -webkit-text-fill-color: #FFFFFF !important;
+    font-weight: 600 !important;
+    border: 1px solid #555555 !important;
+    border-radius: 4px !important;
+    caret-color: #FF0000 !important; /* Cursor titilante de escritura en rojo laser */
 }
-
+/* Arreglar texto del Dropdown sin romper los menus */
+div[data-baseweb="select"] * {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
+/* Efecto al hacer clic: Borde rojo laser suave */
 .stTextInput input:focus,
 .stNumberInput input:focus,
-.stTextArea textarea:focus {
-    border: 1px solid #8b0000 !important;
-    box-shadow: 0px 0px 5px rgba(139, 0, 0, 0.5) !important;
+.stTextArea textarea:focus,
+div[data-baseweb="select"]:focus-within {
+    border: 1px solid #FF0000 !important;
+    box-shadow: 0 0 8px rgba(255,0,0,0.8) !important;
+    outline: none !important;
+}
+/* Restaurar el texto de ayuda de Streamlit (Press Enter to Apply) */
+.stTextInput div[data-testid="InputInstructions"],
+.stTextArea div[data-testid="InputInstructions"],
+div[class*="instructions"],
+div[class*="st-emotion-cache"] > span {
+    color: #888888 !important;
+    -webkit-text-fill-color: #888888 !important;
+    font-size: 0.8rem !important;
 }
 
 /* Labels de los inputs */
