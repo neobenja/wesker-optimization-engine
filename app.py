@@ -392,6 +392,24 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 button, a, input, select, [data-testid="stSelectbox"] {
     cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23ff0000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="2"></circle></svg>') 12 12, pointer !important;
 }
+
+/* --- PROTOCOLO ANTI MODO-CLARO (DESPLEGABLE TACTICO) --- */
+ul[role="listbox"], div[role="listbox"] {
+    background-color: #1E1E24 !important;
+    border: 1px solid #555555 !important;
+}
+ul[role="listbox"] li, div[role="option"], li[role="option"] {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    background-color: #1E1E24 !important;
+    font-weight: 600 !important;
+}
+/* Efecto de seleccion tactica en el menu */
+ul[role="listbox"] li:hover, div[role="option"]:hover, li[role="option"]:hover, div[role="option"][aria-selected="true"], li[role="option"][aria-selected="true"] {
+    background-color: #FF0000 !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
